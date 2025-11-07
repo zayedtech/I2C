@@ -24,7 +24,10 @@ int main() {
     seesaw_bus_init(100000);  
     scan_i2c();
     
-    neotrellis_reset();
+    if (!neotrellis_reset()) {
+    printf("Failed to reset NeoTrellis!\n");
+    while (1); // Halt
+}
 
     if (!neotrellis_wait_ready(300)) {
     printf("Device not ready.\n");
