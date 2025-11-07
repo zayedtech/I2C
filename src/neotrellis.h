@@ -29,5 +29,4 @@ bool neopixel_begin(uint8_t internal_pin /* usually 3 */);
 bool neopixel_set_bulk(const uint8_t *rgb48);
 bool neopixel_show(void);
 
-// Convenience: set a single pixel in a small stack buffer and show
 bool neopixel_set_one_and_show(int index, uint8_t r, uint8_t g, uint8_t b);
