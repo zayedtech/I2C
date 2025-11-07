@@ -84,12 +84,11 @@ static void dump_bytes(const char *tag, const uint8_t *p, size_t n) {
     printf("\n");
 }
 
-// Writes the full 48-byte frame to NEOPIXEL_BUF using the required payload shape:
-// [offset_hi, offset_lo, DATA...] with total payload ≤ 32 bytes per write.
+
 bool neopixel_set_bulk(const uint8_t *rgb48) {
-    // chunk #1: offset 0x0000, 30 data bytes (payload 32)
+    
     uint8_t p0[2 + 30];
-    p0[0] = 0x00; p0[1] = 0x00;                 // start address = 0
+    p0[0] = 0x00; p0[1] = 0x00;           
     memcpy(p0 + 2, rgb48, 30);
     dump_bytes("BUF[0..29] payload", p0, sizeof p0);
 
@@ -97,9 +96,9 @@ bool neopixel_set_bulk(const uint8_t *rgb48) {
     printf("BUF[0..29] -> %s\n", ok1 ? "OK" : "NACK");
     if (!ok1) return false;
 
-    // chunk #2: offset 0x001E, remaining 18 data bytes (payload 20)
+    
     uint8_t p1[2 + 18];
-    p1[0] = 0x00; p1[1] = 0x1E;                 // start address = 30
+    p1[0] = 0x00; p1[1] = 0x1E;                 
     memcpy(p1 + 2, rgb48 + 30, 18);
     dump_bytes("BUF[30..47] payload", p1, sizeof p1);
 
@@ -129,7 +128,7 @@ bool neopixel_set_one_and_show(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
 
     uint8_t buf[NEOTRELLIS_BYTES] = {0};
 
-    // Fill all LEDs to 0 first (explicit for clarity/log symmetry)
+    
     for (int i = 0; i < NEOTRELLIS_LED_COUNT; ++i) {
         int base = 3 * i;
         buf[base + 0] = 0;
@@ -137,14 +136,14 @@ bool neopixel_set_one_and_show(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
         buf[base + 2] = 0;
     }
 
-    // Set selected pixel — GRB (swap to RGB if colors look wrong)
+
     int base = 3 * index;
     buf[base + 0] = g;
     buf[base + 1] = r;
     buf[base + 2] = b;
 
     printf("Lighting LED %u to (r=%u,g=%u,b=%u) [GRB order]\n", index, r, g, b);
-    dump_bytes("Frame[0..15] preview", buf, 16);  // small peek
+    dump_bytes("Frame[0..15] preview", buf, 16); 
 
     bool ok = neopixel_set_bulk(buf);
     if (!ok) {
