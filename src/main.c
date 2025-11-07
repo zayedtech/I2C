@@ -18,7 +18,7 @@ static void scan_i2c(void) {
 
 int main() {
     stdio_init_all();
-    sleep_ms(500); // wait for USB CDC
+    sleep_ms(500); 
     printf("\n=== NeoTrellis bring-up ===\n");
 
     seesaw_bus_init(100000);  
@@ -47,11 +47,13 @@ int main() {
 
     if (!neopixel_set_one_and_show(0, 40, 0, 0)) {
         printf("Single pixel test failed.\n");
+        return false;
     } else {
         printf("Single pixel test lit.\n");
     }
 
-    
+
+
     sleep_ms(500);
 
     uint8_t frame[NEOTRELLIS_BYTES];

@@ -120,43 +120,51 @@ bool neopixel_show(void) {
 }
 
 
-bool neopixel_set_one_and_show(uint8_t index, uint8_t r, uint8_t g, uint8_t b) {
-    if (index >= NEOTRELLIS_LED_COUNT) {
-        printf("IDX out of range: %u\n", index);
+bool neopixel_set_one_and_show(int idx, uint8_t r, uint8_t g, uint8_t b) {
+    if (idx < 0 || idx >= 16) {
+        printf("[ERR] idx %d out of range\n", idx);
         return false;
     }
 
-    uint8_t buf[NEOTRELLIS_BYTES] = {0};
+    uint8_t frame[48] = {0};
+    int base = idx * 3;    
+    frame[base + 0] = g;   
+    frame[base + 1] = r;
+    frame[base + 2] = b;
 
-    
-    for (int i = 0; i < NEOTRELLIS_LED_COUNT; ++i) {
-        int base = 3 * i;
-        buf[base + 0] = 0;
-        buf[base + 1] = 0;
-        buf[base + 2] = 0;
+    printf("[DBG] set idx=%d RGB=(%u,%u,%u) off=%d\n", idx, r, g, b, base);
+
+
+    uint8_t p0[2 + 30];
+    p0[0] = 0x00;           
+    p0[1] = 0x00;          
+    memcpy(p0 + 2, frame, 30);
+
+    if (!seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_BUF, p0, sizeof p0)) {
+        printf("[ERR] BUF write chunk0 failed (off=0,len=30)\n");
+        return false;
+    } else {
+        printf("[DBG] BUF chunk0 ok (off=0,len=30)\n");
     }
 
 
-    int base = 3 * index;
-    buf[base + 0] = g;
-    buf[base + 1] = r;
-    buf[base + 2] = b;
+    uint8_t p1[2 + 18];
+    p1[0] = 0x00;           
+    p1[1] = 0x1E;       
+    memcpy(p1 + 2, frame + 30, 18);
 
-    printf("Lighting LED %u to (r=%u,g=%u,b=%u) [GRB order]\n", index, r, g, b);
-    dump_bytes("Frame[0..15] preview", buf, 16); 
+    if (!seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_BUF, p1, sizeof p1)) {
+        printf("[ERR] BUF write chunk1 failed (off=30,len=18)\n");
+        return false;
+    } else {
+        printf("[DBG] BUF chunk1 ok (off=30,len=18)\n");
+    }
 
-    bool ok = neopixel_set_bulk(buf);
-    if (!ok) {
-        printf("neopixel_set_bulk() FAILED\n");
+
+    if (!seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SHOW, NULL, 0)) {
+        printf("[ERR] SHOW failed\n");
         return false;
     }
-
-    ok = neopixel_show();
-    if (!ok) {
-        printf("neopixel_show() FAILED\n");
-        return false;
-    }
-
-    printf("neopixel_set_one_and_show() -> SUCCESS\n");
+    printf("[DBG] SHOW ok\n");
     return true;
 }
