@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "uart.h": "c",
+        "stdlib.h": "c",
+        "i2c.h": "c"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
+}
