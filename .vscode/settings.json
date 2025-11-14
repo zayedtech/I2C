@@ -2,7 +2,10 @@
     "files.associations": {
         "uart.h": "c",
         "stdlib.h": "c",
-        "i2c.h": "c"
+        "i2c.h": "c",
+        "tusb_config.h": "c",
+        "stdio_usb.h": "c",
+        "neotrellis.h": "c"
     },
     "C_Cpp.errorSquiggles": "disabled"
 }
