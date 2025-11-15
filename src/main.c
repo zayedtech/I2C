@@ -142,32 +142,23 @@ int main() {
     }
     printf("NeoPixel init OK.\n");
 
-    sleep_ms(2);
+        uint8_t speed = 0x01;  // 0x01 = 800kHz, 0x00 = 400kHz
+    seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SPEED, &speed, 1);
+    sleep_ms(300);
 
     
 
-    if (!neopixel_fill_all_and_show(100, 100, 100)) {
-        printf("all pixel test failed.\n");
-        return false;
-    } 
-
+    // if (!neopixel_fill_all_and_show(100, 100, 100)) {
+    //     printf("all pixel test failed.\n");
+    //     return false;
+    // } 
     // neopixel_test_simple();
-
-
     //     trellis_neopixel_dump_config();
 // if (!trellis_keypad_begin()) {
 //     printf("Keypad init failed.\n");
 //     while (1) tight_loop_contents();
 // 
 // printf("Ready. Press keys to light pixels.\n");
-
-
-
-
-
-
-
-
 // while (1) {
 //     uint8_t k; bool down;
 //     if (trellis_read_event(&k, &down)) {
@@ -179,16 +170,15 @@ int main() {
 //             neopixel_set_one_and_show(k, 0, 0, 0);
 //         }
 //     }
-
-//     // else printf("trellis read event failed\n");
+//    // else printf("trellis read event failed\n");
 //     sleep_ms(2);
 // }
 
-
-    // if (!neopixel_set_one_and_show(0, 100, 5, 5)) {
-    //     printf("Single pixel test failed.\n");
-    //     return false;
-    // }
+// neopixel_clear_all();
+    if (!neopixel_set_one_and_show(0, 255, 0, 0)) {
+        printf("Single pixel test failed.\n");
+        return false;
+    }
 
     // else {
     //     printf("all pixel test lit.\n");

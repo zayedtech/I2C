@@ -75,6 +75,7 @@ bool trellis_read_event(uint8_t *idx, bool *pressed);
 bool trellis_handle_events(void);
 static void trellis_neopixel_dump_config(void);
 bool neopixel_test_simple();
+bool neopixel_clear_all();
 
 
 #ifndef DEBUG_KEYS

@@ -194,22 +194,24 @@ bool neotrellis_wait_ready(uint32_t timeout_ms) {
 bool neopixel_begin(uint8_t internal_pin) {
     sleep_ms(100);                             
 
-        uint8_t len_be[2] = { 0x00, 0x30 };
-        uint16_t len = ((uint16_t)len_be[0] << 8) | len_be[1];
+    uint16_t len = 48;                                // 16 * 3
+    uint8_t len_le[2] = { (uint8_t)(len & 0xFF), (uint8_t)(len >> 8) };  // len=48 -> {0x30, 0x00}
 
-    if (!seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_BUF_LENGTH, len_be, 2)) {
+
+    if (!seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_BUF_LENGTH, len_le, 2)) {
         printf("BUF_LENGTH write failed\n"); return false;
-    } else { printf("BUF length set successfully to 0x%04X (%u)  [MSB=0x%02X LSB=0x%02X]\n", len, len, len_be[0], len_be[1]);}
+    } else { printf("BUF length set successfully to 0x%04X (%u)  [MSB=0x%02X LSB=0x%02X]\n", len, len, len_le[0], len_le[1]);}
     sleep_ms(200);
 
 
-    uint8_t pin = 3;  
+    uint8_t pin =3 ;  
     if (!seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_PIN, &pin, 1))  
     { printf("PIN set fail\n");
     } 
     else{
         printf("PIN set succesfully to %d\n", pin);
     }
+    sleep_ms(2);
 
         if (!neotrellis_wait_ready(300)) {
         printf("HW_ID never became 0x55\n");
@@ -227,80 +229,89 @@ bool neopixel_begin(uint8_t internal_pin) {
 
 
 
-bool neopixel_show(void) {
-    bool ok = seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SHOW, NULL, 0);
-    printf("SHOW (0B) -> %s\n", ok ? "OK" : "NACK");
-    if (!ok) {
-        uint8_t one = 1;
-        ok = seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SHOW, &one, 1);
-        printf("SHOW (1B) -> %s\n", ok ? "OK" : "NACK");
-    }
+// bool neopixel_show(void) {
+//     bool ok = seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SHOW, NULL, 0);
+//     printf("SHOW (0B) -> %s\n", ok ? "OK" : "NACK");
+//     if (!ok) {
+//         uint8_t one = 1;
+//         ok = seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SHOW, &one, 1);
+//         printf("SHOW (1B) -> %s\n", ok ? "OK" : "NACK");
+//     }
+//     sleep_ms(100);
+//     return ok;
+// }
 
-    sleep_ms(100);
+
+//claude's code:
+
+bool neopixel_show(void) {
+    uint8_t one = 1;                                  // any value
+    bool ok = seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SHOW, &one, 1);
+    if(ok) printf("show %s\n", ok? "ok" : "NACK");
+    sleep_ms(10);
     return ok;
 }
 
 
 
-
 #define DBG(fmt, ...)  printf("[NEO] " fmt "\n", ##__VA_ARGS__)
 
-
-
+//claudes code:
 static bool neopixel_buf_write(uint16_t start, const uint8_t *data, size_t len) {
     while (len) {
-        size_t n = len > 30 ? 30 : len;          // BUF: 2B addr + up to 30B data = 32 total
-        uint8_t payload[2 + 30];
-
+        size_t n = len > 28 ? 28 : len;  // Chunk size
+        uint8_t payload[2 + 28];
+        
         // Start address is BIG-endian: MSB first, then LSB
-        payload[0] = (uint8_t)((start >> 8) & 0xFF);
-        payload[1] = (uint8_t)( start       & 0xFF);
-        memcpy(&payload[2], data, n);
-
-
-
-        // for(int j = 0; j < sizeof(payload); j ++)
-        // {
-        //     printf("payload[%d]: %d\n", j, payload[j]);
-        // }
-
-//         DBG("BUF write: start=%u (0x%04X) bytes=%u", start, start, (unsigned) n);
-//         for (size_t i = 0; i < n; ++i) printf(" %02X", data[i]);  // raw data chunk
-// printf("\n");
-// printf("ADDR BE = %02X %02X\n", payload[0], payload[1]); // 00 00 at start=0
-
-        // for (size_t i = 0; i < (n > 9 ? 9 : n); i++)
-        //     printf(" %02X", payload[2+i]);
-        // if (n) printf("%s", n > 9 ? " ..." : "");
-        // printf("\n");
+        payload[0] = (uint8_t)(start >> 8) & 0xFF;
+        payload[1] = (uint8_t)(start & 0xFF);
+        memcpy(&payload[2], data, n);  // ✅ Copy only 'n' bytes
         
+        size_t total = 2 + n;  // ✅ Total frame is 2 addr bytes + n data bytes
         
-        //neotrellis_wait_ready(300);
-        bool ok = seesaw_write_buf(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_BUF, payload, 2 + n);
-
+        // Send exactly 'total' bytes
+        bool ok = seesaw_write_buf(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, 
+                                   NEOPIXEL_BUF, payload, total);
         if (!ok) {
-            DBG("ERROR: BUF write failed (start=%u, n=%u)", start, (unsigned)n);
             return false;
         }
+        
         start += (uint16_t)n;
         data  += n;
         len   -= n;
     }
+    
     return true;
 }
 
 
-
 bool neopixel_set_one_and_show(int idx, uint8_t r, uint8_t g, uint8_t b) {
-    if (idx < 0 | idx > 15) { DBG("ERROR: idx<0"); return false; }
+    if ((unsigned)idx >= 16) { printf("idx out of range\n"); return false; }
+
     uint16_t start = (uint16_t)(idx * 3);
-    uint8_t rgb[6] = { r, g, b, r, g, b };               // WS2812 uses rgb
+    uint8_t  grb[3] = { g, r, b };           // WS2812 is GRB
+    
 
-    DBG("Set one: idx=%d -> start=%u  RGB=(%u,%u,%u) rgb=(%u,%u,%u)",
-        idx, start, r,g,b, rgb[0],rgb[1],rgb[2] );
+        uint8_t zeros[48] = {0};
+neopixel_buf_write(0, zeros, 28);   // First chunk
+sleep_ms(2);
+neopixel_buf_write(28, zeros + 28, 20);  // Second chunk
+sleep_ms(2);
+neopixel_show();
 
-    if (!neopixel_buf_write(start, rgb, sizeof(rgb))) return false;
-    return neopixel_show();
+    // send exactly 3 bytes to BUF at 'start'
+    if (!neopixel_buf_write(start, grb, 3)) {
+        printf("BUF write failed (idx=%d start=%u)\n", idx, start);
+        return false;
+    }
+
+
+
+
+
+    sleep_us(300);   
+    int ok = neopixel_show();                         // tiny settle to avoid busy NACK
+    return ok;
 }
 
 

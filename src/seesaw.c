@@ -100,6 +100,7 @@ bool seesaw_write_buf(uint8_t addr, uint8_t module, uint8_t reg,
         for (size_t i = 0; i < total; ++i) printf(" %02X", frame[i]);
         printf("\n");
 
+
     int wrote = i2c_write_blocking(NEOTRELLIS_I2C, addr, frame, total, false);
     printf("[I2C] wrote=%d/%u\n", wrote, (unsigned)total);
             for(int j = 0; j < sizeof(frame); j ++)
