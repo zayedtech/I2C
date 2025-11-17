@@ -50,14 +50,34 @@ int main() {
     seesaw_write(NEOTRELLIS_ADDR, SEESAW_NEOPIXEL_BASE, NEOPIXEL_SPEED, &speed, 1);
     sleep_ms(300);
 
-    // if(!neopixel_set_one_and_show(9, 0, 255, 255)) return false;
 
-    if (!neopixel_fill_all_and_show(255, 255, 255)) {
-        printf("all pixel test failed.\n");
-        return false;
-    } 
+    neotrellis_rainbow_startup();
+    sleep_ms(200);
 
 
+
+printf("Before keypad init\n");
+fflush(stdout);
+
+    neotrellis_keypad_init();
+
+    sleep_ms(200);
+
+    neotrellis_clear_fifo(); 
+
+printf("=== Starting main loop ===\n");
+
+
+while (1) {
+    int idx = -1;
+    
+    if (neotrellis_poll_buttons(&idx)) {
+        printf("Button %d pressed!\n", idx);
+        set_led_for_idx(idx, true);  // Light it up
+    }
+    
+    //sleep_ms(5);  // Poll at 20Hz
+}
 
     return 0;
 }

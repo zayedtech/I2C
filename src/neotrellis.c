@@ -4,6 +4,9 @@
 #include <string.h>
 #include <stdio.h>
 
+
+
+
 bool neotrellis_reset(void) {
     uint8_t dum = 0xFF;
     bool ok = seesaw_write(NEOTRELLIS_ADDR, SEESAW_STATUS_BASE, SEESAW_STATUS_SWRST, &dum, 1);
@@ -91,7 +94,7 @@ bool neopixel_show(void) {
     uint8_t hdr[2] = { SEESAW_NEOPIXEL_BASE, NEOPIXEL_SHOW };
     int wrote = i2c_write_blocking(NEOTRELLIS_I2C, NEOTRELLIS_ADDR, hdr, 2, false);
     
-    printf("SHOW: wrote=%d (expected 2)\n", wrote);
+    // printf("SHOW: wrote=%d (expected 2)\n", wrote);
     
     if (wrote != 2) {
         printf("SHOW command FAILED!\n");
@@ -158,35 +161,291 @@ neopixel_show();
 }
 
 
-
-
 bool neopixel_fill_all_and_show(uint8_t r, uint8_t g, uint8_t b) {
     // 16 pixels * 3 bytes each = 48 bytes
     uint8_t frame[48];
-
-
     for (int i = 0; i < 16; ++i) {
         frame[3 * i + 0] = g;
         frame[3 * i + 1] = r;
         frame[3 * i + 2] = b;
     }
-
     if (!neopixel_buf_write(0, frame, 48)) {
         printf("neopixel_fill_all_and_show: buf_write failed\n");
         return false;
     }
-
-
     sleep_us(300);
     int ok = neopixel_show();
-
     return ok;
+}
+
+
+static void color_wheel(uint8_t pos, uint8_t *r, uint8_t *g, uint8_t *b) {
+    if (pos < 85) {
+        *r = 255 - pos * 3;
+        *g = pos * 3;
+        *b = 0;
+    } else if (pos < 170) {
+        pos -= 85;
+        *r = 0;
+        *g = 255 - pos * 3;
+        *b = pos * 3;
+    } else {
+        pos -= 170;
+        *r = pos * 3;
+        *g = 0;
+        *b = 255 - pos * 3;
+    }
+}
+
+
+
+void neotrellis_rainbow_startup(void) {
+    uint8_t frame[48];        // 16 * 3 bytes
+    const int frames = 32;    // number of animation steps
+    const int delay_ms = 60;  // delay between frames
+
+    for (int step = 0; step < frames; ++step) {
+        for (int i = 0; i < 16; ++i) {
+            uint8_t r, g, b;
+
+            // Different hue per pixel, slowly shifting with "step"
+            uint8_t hue = (i * 16 + step * 8) & 0xFF;
+            color_wheel(hue, &r, &g, &b);
+
+            // WS2812 is GRB
+            frame[3 * i + 0] = g;
+            frame[3 * i + 1] = r;
+            frame[3 * i + 2] = b;
+        }
+
+        // Write whole buffer and show
+        neopixel_buf_write(0, frame, 48);
+        sleep_us(300);
+        neopixel_show();
+        sleep_ms(delay_ms);
+    }
+
+    // Optional: end with everything off
+    neopixel_fill_all_and_show(0, 0, 0);
+}
+
+
+// bool neotrellis_read_key_event(uint8_t *raw_key, uint8_t *edge) {
+//     uint8_t count;
+//     // how many events are in FIFO
+//     if (!seesaw_read(NEOTRELLIS_ADDR,
+//                       SEESAW_KEYPAD_BASE,
+//                       KEYPAD_COUNT,
+//                       &count, 1)) {
+//         return false;
+//     }
+//     if (count == 0) {
+//         return false;   // no new events
+//     }
+//     uint8_t buf[4];     // one keyEventRaw (4 bytes)
+//     if (!seesaw_read(NEOTRELLIS_ADDR,
+//                      SEESAW_KEYPAD_BASE,
+//                      KEYPAD_FIFO,
+//                      buf, 4)) {
+//         return false;
+//     }
+//     uint8_t event = buf[0];
+//     *raw_key = event >> 2;   // upper 6 bits = key number
+//     *edge    = event & 0x3;  // lower 2 bits = edge
+//     return true;
+// }
+
+
+static const uint8_t neotrellis_key_lut[16] = {
+    0, 1, 2, 3,
+    8, 9, 10, 11,
+    16, 17, 18, 19,
+    24, 25, 26, 27
+};
+
+
+static bool set_keypad_event(uint8_t key, uint8_t edge, bool enable) {
+
+    uint8_t ks = 0;
+    if (enable) {
+        ks |= 0x01;                   
+        ks |= (1u << (edge + 1));      
+    }
+
+    uint8_t cmd[2] = { key, ks };
+
+    printf("[neo] enable %s: key=%d cfg=0x%02x\n",
+           (edge == SEESAW_KEYPAD_EDGE_RISING) ? "rising" : "falling",
+           key, ks);
+
+    return seesaw_write(NEOTRELLIS_ADDR,
+                        SEESAW_KEYPAD_BASE,
+                        KEYPAD_ENABLE,
+                        cmd, sizeof(cmd));
+}
+
+
+
+bool neotrellis_keypad_init(void) {
+    printf("[neo] keypad_init: start\n");
+    
+    uint8_t val = 0x01;
+    if (!seesaw_write(NEOTRELLIS_ADDR, SEESAW_KEYPAD_BASE, KEYPAD_INTEN, &val, 1)) {
+        printf("[neo] enableKeypadInterrupt failed\n");
+        return false;
+    }
+
+
+    // Enable rising + falling for all 16 logical pads
+    for (int i = 0; i < 16; i++) {
+        uint8_t key = neotrellis_key_lut[i];
+        
+        if (!set_keypad_event(key, SEESAW_KEYPAD_EDGE_RISING, true)) {
+            printf("[neo] setKeypadEvent rising failed for key %d\n", key);
+            return false;
+        }
+        
+        if (!set_keypad_event(key, SEESAW_KEYPAD_EDGE_FALLING, true)) {
+            printf("[neo] setKeypadEvent falling failed for key %d\n", key);
+            return false;
+        }
+    }
+    
+    // Enable keypad interrupt source (even if you don't wire INT pin)
+    printf("[neo] keypad_init OK\n");
+    return true;
 }
 
 
 
 
 
+
+void set_led_for_idx(int idx, bool on)
+{
+    if (!on) {
+        // turn this one off only
+        neopixel_set_one_and_show(idx, 0x00, 0x00, 0x00);
+        return;
+    }
+
+    if (idx == 0)  { neopixel_set_one_and_show(0, 0x20, 0x00, 0x00); } // red
+    if (idx == 1)  { neopixel_set_one_and_show(1, 0x00, 0x20, 0x00); } // green
+    if (idx == 2)  { neopixel_set_one_and_show(2, 0x00, 0x00, 0x20); } // blue
+    if (idx == 3)  { neopixel_set_one_and_show(3, 0x20, 0x20, 0x00); } // yellow
+
+    if (idx == 4)  { neopixel_set_one_and_show(4, 0x20, 0x00, 0x20); } // magenta
+    if (idx == 5)  { neopixel_set_one_and_show(5, 0x00, 0x20, 0x20); } // cyan
+    if (idx == 6)  { neopixel_set_one_and_show(6, 0x10, 0x10, 0x20); } // bluish
+    if (idx == 7)  { neopixel_set_one_and_show(7, 0x20, 0x10, 0x00); } // orange
+
+    if (idx == 8)  { neopixel_set_one_and_show(8, 0x10, 0x20, 0x00); } // yellow-green
+    if (idx == 9)  { neopixel_set_one_and_show(9, 0x00, 0x10, 0x20); } // teal
+    if (idx == 10) { neopixel_set_one_and_show(10, 0x20, 0x00, 0x10); } // pink-red
+    if (idx == 11) { neopixel_set_one_and_show(11, 0x10, 0x00, 0x20); } // violet
+
+    if (idx == 12) { neopixel_set_one_and_show(12, 0x05, 0x20, 0x05); } // light green
+    if (idx == 13) { neopixel_set_one_and_show(13, 0x20, 0x05, 0x05); } // light red
+    if (idx == 14) { neopixel_set_one_and_show(14, 0x05, 0x05, 0x20); } // light blue
+    if (idx == 15) { neopixel_set_one_and_show(15, 0x20, 0x10, 0x20); } // lavender
+}
+
+
+
+
+
+
+
+
+bool neotrellis_poll_buttons(int *idx_out)
+{
+    uint8_t count = 0;
+    
+    if (!seesaw_read(NEOTRELLIS_ADDR, SEESAW_KEYPAD_BASE, KEYPAD_COUNT, &count, 1)) {
+        return false;
+    }
+    
+    if (count == 0 ) {
+        return false;
+    }
+    
+    if (count > 8) count = 8;
+    
+    printf("[neo] KEYPAD_COUNT = %u\n", count);
+
+    for (uint8_t e = 0; e < count; e++) {
+        uint8_t evt;
+        if (!seesaw_read(NEOTRELLIS_ADDR, SEESAW_KEYPAD_BASE, KEYPAD_FIFO, &evt, 1)) {
+            return false;
+        }
+        
+        uint8_t keynum = evt >> 2;
+        uint8_t edge = evt & 0x03;
+        printf("[neo] event %u: raw0=0x%02x keynum=%u edge=%u\n", e, evt, keynum, edge);
+
+
+        if (evt == 0xFF  || edge == 0)  {
+            continue;
+        }
+        
+        // Check for FALLING edge (edge=2) which is the actual button press
+        if (edge != SEESAW_KEYPAD_EDGE_FALLING) {  
+            continue;
+        }
+        
+        // Map keynum to button index
+        for (int i = 0; i < 16; i++) {
+            if (neotrellis_key_lut[i] == keynum) {
+                *idx_out = i;
+                printf("[neo] Button %d pressed (keynum=%u)!\n", i, keynum);
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+
+
+
+
+void neotrellis_clear_fifo(void)
+{
+    while (1) {
+        uint8_t count = 0;
+
+        // Read how many events are pending
+        if (!seesaw_read(NEOTRELLIS_ADDR,
+                         SEESAW_KEYPAD_BASE,
+                         KEYPAD_COUNT,
+                         &count, 1)) {
+            printf("[neo] clear_fifo: count read failed\n");
+            return;   // give up on error
+        }
+
+        if (count == 0 || count == 0xFF) {
+            // FIFO is empty or bogus value – we're done
+            break;
+        }
+
+        if (count > 8) count = 8;  // FIFO depth on your board
+
+        uint8_t dump[4 * 8];       // max 8 events * 4 bytes/event
+
+        // Read and discard everything that’s currently in the FIFO
+        if (!seesaw_read(NEOTRELLIS_ADDR,
+                         SEESAW_KEYPAD_BASE,
+                         KEYPAD_FIFO,
+                         dump,
+                         4 * count)) {
+            printf("[neo] clear_fifo: FIFO read failed\n");
+            return;
+        }
+    }
+
+    printf("[neo] FIFO cleared\n");
+}
 
 
 
