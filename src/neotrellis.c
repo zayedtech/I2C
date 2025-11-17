@@ -427,20 +427,50 @@ bool neotrellis_poll_buttons(int *idx_out)
         if (evt == 0xFF  || edge == 0)  {
             continue;
         }
-        
-        // Check for FALLING edge (edge=2) which is the actual button press
-        if (edge != SEESAW_KEYPAD_EDGE_FALLING) {  
-            continue;
-        }
-        
 
+
+
+
+
+
+        int idx = -1;
         for (int i = 0; i < 16; i++) {
             if (neotrellis_key_lut[i] == keynum) {
-                *idx_out = i;
-                printf("[neo] Button %d pressed (keynum=%u)!\n", i, keynum);
-                return true;
+                idx = i;
+                break;
             }
         }
+        if (idx < 0) {
+            continue;   // not one of our 16 pads
+        }
+
+if (edge == SEESAW_KEYPAD_EDGE_RISING) {
+
+
+    set_led_for_idx(idx, true);    
+    if (idx_out) {
+        *idx_out = idx;
+        printf("[neo] Button %d PRESSED (keynum=%u)\n", idx, keynum);
+        return true;                
+    }
+}
+else if (edge == SEESAW_KEYPAD_EDGE_FALLING) {
+    set_led_for_idx(idx, false);     
+    printf("[neo] Button %d RELEASED (keynum=%u)\n", idx, keynum);
+}
+
+        
+        // // Check for FALLING edge (edge=2) which is the actual button press
+        // if (edge != SEESAW_KEYPAD_EDGE_FALLING) {  
+        //     continue;
+        // }
+        // for (int i = 0; i < 16; i++) {
+        //     if (neotrellis_key_lut[i] == keynum) {
+        //         *idx_out = i;
+        //         printf("[neo] Button %d pressed (keynum=%u)!\n", i, keynum);
+        //         return true;
+        //     }
+        // }
     }
     
     return false;
