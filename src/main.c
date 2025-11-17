@@ -73,7 +73,7 @@ while (1) {
     
     if (neotrellis_poll_buttons(&idx)) {
         printf("Button %d pressed!\n", idx);
-        set_led_for_idx(idx, true);  // Light it up
+        set_led_for_idx(idx, true);  
     }
     
     //sleep_ms(5);  // Poll at 20Hz
